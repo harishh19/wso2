@@ -1,0 +1,651 @@
+<?php
+
+/**
+ * @file Sealedair wso2 api store.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function sealedair_wso2_store_menu() {
+  $items = array();
+
+  $items['store/apis'] = array(
+    'title' => 'API Catalog',
+    'description' => 'Provide the List of APIs',
+    'page callback' => 'sealedair_wso2_store_apis_list',
+    'access arguments' => array('access sealedair wso2 apis'),
+    'type' => MENU_NORMAL_ITEM, //Will appear in Navigation menu.
+  );
+  $items['admin/config/apis'] = array(
+    'title' => 'Sealedair wso2 API Config',
+    'description' => 'Sealedair WSO2 API configuration settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sealedair_wso2_store_apis_config_settings'),
+    'access arguments' => array('access sealedair wso2 apis config'),
+    'type' => MENU_NORMAL_ITEM, //Will appear in Navigation menu.
+  );
+  $items['node/%node/swagger'] = array(
+    'title' => 'Swagger',
+    'page callback' => 'sealedair_wso2_store_apis_swagger',
+    'page arguments' => array(1),
+    'access callback' => 'node_access',
+    'access arguments' => array('view', 1),
+    'weight' => 2,
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function sealedair_wso2_store_permission() {
+  return array(
+    'access sealedair wso2 apis' => array(
+      'title' => t('Access content for the Sealedair wso2'),
+    ),
+    'access sealedair wso2 apis config' => array(
+      'title' => t('Access content for the Sealedair wso2 Apis configuration settings.'),
+    )
+  );
+}
+
+/*
+ * Implements hook_user_login().
+ */
+
+function sealedair_wso2_store_user_login(&$edit, $account) {
+  if (in_array('Consumer', $account->roles)) {
+    $edit['redirect'] == "store/apis/list";
+    $_GET['destination'] = "store/apis/list";
+  }
+  elseif (in_array('Provider', $account->roles)) {
+    $_GET['destination'] = "publisher/apis/list";
+    $edit['redirect'] == "publisher/apis/list";
+  }
+  else {
+    $edit['redirect'] == "<front>";
+  }
+}
+
+/**
+ * Return swagger file.
+ */
+function sealedair_wso2_store_apis_swagger($node) {
+  $element = array();
+  $module_path = drupal_get_path('module', 'swagger_ui_formatter');
+  $js_path = $module_path . '/swagger_ui/dist/lib/';
+  drupal_add_js($js_path . 'jquery-1.8.0.min.js', 'file');
+  drupal_add_js($js_path . 'jquery.slideto.min.js', 'file');
+  drupal_add_js($js_path . 'jquery.wiggle.min.js', 'file');
+  drupal_add_js($js_path . 'jquery.ba-bbq.min.js', 'file');
+  drupal_add_js($js_path . 'handlebars-2.0.0.js', 'file');
+  drupal_add_js($js_path . 'underscore-min.js', 'file');
+  drupal_add_js($js_path . 'backbone-min.js', 'file');
+  drupal_add_js($module_path . '/swagger_ui/dist/swagger-ui.js', 'file');
+  drupal_add_js($js_path . 'highlight.7.3.pack.js', 'file');
+  drupal_add_js($js_path . 'jsoneditor.min.js', 'file');
+  drupal_add_js($js_path . 'marked.js', 'file');
+  drupal_add_js($js_path . 'swagger-oauth.js', 'file');
+
+  $css_path = $module_path . '/swagger_ui/dist/css/';
+  drupal_add_css($css_path . 'typography.css', array(
+    'type' => 'file',
+    'media' => 'screen',
+    'weight' => 200,
+    'group' => CSS_THEME,
+  ));
+  drupal_add_css($css_path . 'reset.css', array(
+    'type' => 'file',
+    'media' => 'screen',
+    'weight' => 201,
+    'group' => CSS_THEME,
+  ));
+  drupal_add_css($css_path . 'screen.css', array(
+    'type' => 'file',
+    'media' => 'screen',
+    'weight' => 202,
+    'group' => CSS_THEME,
+  ));
+  drupal_add_css($css_path . 'reset.css', array(
+    'type' => 'file',
+    'media' => 'print',
+    'weight' => 203,
+    'group' => CSS_THEME,
+  ));
+  drupal_add_css($css_path . 'print.css', array(
+    'type' => 'file',
+    'media' => 'print',
+    'weight' => 204,
+    'group' => CSS_THEME,
+  ));
+  $element = array();
+  $display['settings'] = array(
+    'validator' => 'default',
+    'show_request_headers' => FALSE,
+    'doc_expansion' => 'none',
+    'validator_url' => NULL
+  );
+  $settings = $display['settings'];
+
+  $swagger_files = array();
+  $items = $node->field_swagger_file['und'];
+  $swagger_files = array();
+  foreach ($items as $delta => $item) {
+    $swagger_files[] = array(
+      'url' => file_create_url($item['uri']),
+    );
+    $element[$delta]['#markup'] = theme('swagger_ui_formatter', array(
+      'delta' => $delta,
+    ));
+  }
+
+  $validator_url = FALSE;
+  if ($settings['validator'] == 'none') {
+    $validator_url = NULL;
+  }
+  elseif ($settings['validator'] == 'default') {
+    $validator_url = FALSE;
+  }
+  else {
+    $validator_url = $settings['validator_url'];
+  }
+
+  drupal_add_js($module_path . '/swagger_ui_formatter.js', 'file');
+  drupal_add_js(array(
+    'swagger_ui_formatter' => array(
+      'swagger_files' => $swagger_files,
+      'validator_url' => $validator_url,
+      'doc_expansion' => $settings['doc_expansion'],
+      'show_request_headers' => $settings['show_request_headers'],
+    ),
+      ), 'setting');
+  return $element;
+}
+
+/**
+ * @param type $form
+ * @param type $form_state
+ */
+function sealedair_wso2_store_apis_config_settings($form, &$form_state) {
+  $form = array();
+  $form['wso2_base_uri'] = array(
+    '#type' => 'textfield',
+    '#title' => t('WSO2 Base URI'),
+    '#default_value' => variable_get('wso2_base_uri'),
+    '#required' => TRUE
+  );
+  $form['wso2_apis_endtoken'] = array(
+    '#type' => 'textfield',
+    '#title' => t('API End Token'),
+    '#default_value' => variable_get('wso2_apis_endtoken'),
+    '#required' => TRUE
+  );
+  $form['wso2_client_registration'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Client Registration'),
+    '#default_value' => variable_get('wso2_client_registration'),
+    '#required' => TRUE
+  );
+  $form['wso2_token_access'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Token Access'),
+    '#default_value' => variable_get('wso2_token_access'),
+    '#required' => TRUE
+  );
+  $form['wso2_user_register'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Store User Registration'),
+    '#default_value' => variable_get('wso2_user_register'),
+    '#required' => TRUE
+  );
+  return system_settings_form($form);
+}
+
+/*
+ * Return apis block.
+ */
+
+function sealedair_wso2_store_apis_list() {
+  // _get_wso_api_store_sync();
+  drupal_set_title($title = "API Catalog", $output = CHECK_PLAIN);
+  return '';
+}
+
+/**
+ * Implements hook_cron().
+ */
+function sealedair_wso2_store_cron() {
+  // Get APIS syn from WSO2.
+  _get_wso_api_store_sync();
+  // Get Application based on user.
+}
+
+/**
+ * Callback WsO2 API syn on cron job.
+ */
+function _get_wso_api_store_sync() {
+  $path = 'public://swagger/';
+  //$url = 'https://apim.srijan.com.au:9443/api/am/store/v0.10/apis';
+  //$url = 'https://52.220.91.63:9443/api/am/store/v0.10/apis';
+  $url = variable_get('wso2_base_uri') . '/' . variable_get('wso2_apis_endtoken');
+  $response = drupal_http_request($url, array('method' => 'GET'));
+  if ($response->code == 200) {
+    $data = drupal_json_decode($response->data);
+    if (!empty($data['list'])) {
+      foreach ($data['list'] as $api_detail) {
+        $url = variable_get('wso2_base_uri') . "/" . variable_get('wso2_apis_endtoken') . "/" . $api_detail['id'] . "/swagger";
+        $swagger = drupal_http_request($url, array('method' => 'GET'));
+        if ($swagger->code == 200) {
+          if (file_prepare_directory($path, FILE_CREATE_DIRECTORY)) {
+            $file_name = $api_detail['name'] . '-' . $api_detail['id'] . '.json';
+            file_put_contents($path . $file_name, $swagger->data);
+            $apibrief = variable_get('wso2_base_uri') . "/" . variable_get('wso2_apis_endtoken') . "/" . $api_detail['id'];
+            $apibrief_details = drupal_http_request($apibrief, array('method' => 'GET'));
+            if ($apibrief_details->code == 200) {
+              $apibrief_data = drupal_json_decode($apibrief_details->data);
+              //dsm($apibrief_data);
+              $api_detail['tags'] = $apibrief_data['tags'];
+              $endpointUrls = array();
+              foreach($apibrief_data['endpointURLs'][0]['environmentURLs'] as $key => $endpointUrl) {
+                $endpointUrls[] = $endpointUrl;
+              }
+              $api_detail['endpointurls'] = $endpointUrls;
+            }
+
+            $api_exists = _get_wso_api_store_api_doc_entity_id($api_detail);
+            if (!empty($api_exists)) {
+              _get_wso_api_store_update_api_doc_entity($api_detail, $api_exists, $path, $file_name);
+            }
+            else {
+              _get_wso_api_store_create_api_doc_entity($api_detail, $path, $file_name);
+            }
+          }
+        }
+      }
+    }
+    watchdog('Sealedair WsO2 API Syn', 'Sealeadair Wso2 APIs sync run Successfully.');
+  }
+  else {
+    drupal_set_message(t('Please contact your site administrator, Error Display: @error.', array('@error' => $response->error)), 'error');
+  }
+}
+
+/**
+ * Get API Docs Entity ID if exists.
+ * @param array $api_detail
+ */
+function _get_wso_api_store_api_doc_entity_id($api_detail) {
+  if (empty($api_detail['id'])) {
+    return;
+  }
+  $query = db_select('node', 'n');
+  $query->join('field_data_field_api_id', 'fai', 'n.nid=fai.entity_id');
+  $query->fields('n', array('nid'));
+  $query->condition('fai.field_api_id_value', $api_detail['id']);
+  $result = $query->execute()->fetchField();
+  return $result;
+}
+
+/**
+ * 
+ */
+function _get_wso_api_store_update_api_doc_entity($api_detail, $api_entity_id, $path, $file_name) {
+  // Add API tag term if added on publisher end on editing API.
+  if (!empty($api_detail['tags'])) {
+    $apiTagcheck = _get_wso_api_store_create_tag_by_name($api_detail['tags']);
+  }
+
+  $api = node_load($api_entity_id);
+  $api->title = $api_detail['name'];
+  $api->body[$api->language][0]['value'] = $api_detail['description'];
+  $swagger_file = _get_wso_api_store_apis_docs_swagger_file($path, $file_name);
+  $api->field_swagger_file[$api->language][0] = (array) $swagger_file;
+  if (!empty($api_detail['tags'])) {
+    foreach ($api_detail['tags'] as $key => $tag) {
+      $termId = _get_wso_api_store_tag_term_check($tag);
+      $api->field_api_tag[LANGUAGE_NONE][$key]['tid'] = $termId;
+    }
+  }
+  foreach($api_detail['endpointurls'] as $key => $endpointUrl) {
+    $api->field_production_endpoint_url[LANGUAGE_NONE][$key]['value'] = $endpointUrl;
+    $api->field_production_endpoint_url[LANGUAGE_NONE][$key]['safe_value'] = $endpointUrl;
+  }
+  node_save($api);
+}
+
+/**
+ * Create "API Docs" Entity on every cron job.
+ * 
+ * @param type $api
+ */
+function _get_wso_api_store_create_api_doc_entity($api_detail, $path, $file_name) {
+  global $user;
+  // if API contains tag.
+  if (!empty($api_detail['tags'])) {
+    $apiTagcheck = _get_wso_api_store_create_tag_by_name($api_detail['tags']);
+  }
+// Create node object.
+  $node = new StdClass();
+  $node->uid = $user->uid;
+  $node->type = 'apis_doc';
+  $node->language = LANGUAGE_NONE;
+  node_object_prepare($node);
+  $node->title = $api_detail['name'];
+  $node->body['und'][0]['value'] = $api_detail['description'];
+  $swagger_file = _get_wso_api_store_apis_docs_swagger_file($path, $file_name);
+  $node->field_swagger_file[$node->language][0] = (array) $swagger_file;
+  $node->field_api_id[$node->language][0]['value'] = $api_detail['id'];
+  if (!empty($api_detail['tags'])) {
+    foreach ($api_detail['tags'] as $key => $tag) {
+      $termId = _get_wso_api_store_tag_term_check($tag);
+      $node->field_api_tag[$node->language][$key]['tid'] = $termId;
+    }
+  }
+  foreach($api_detail['endpointurls'] as $key => $endpointUrl) {
+    $api->field_production_endpoint_url[LANGUAGE_NONE][$key]['value'] = $endpointUrl;
+    $api->field_production_endpoint_url[LANGUAGE_NONE][$key]['safe_value'] = $endpointUrl;
+  }
+  node_save($node);
+}
+
+/**
+ * Create Entity swagger file object.
+ */
+function _get_wso_api_store_apis_docs_swagger_file($path, $file_name) {
+  global $user;
+  // Create Swagger File object.
+  $file = new StdClass();
+  $file->uid = $user->uid;
+  $file->uri = $path . $file_name;
+  $file->filemime = file_get_mimetype($file->uri);
+  $file->status = 1;
+  $file->display = 1;
+  $file->description = "";
+  $dest = file_default_scheme() . '://' . $file_name;
+  $file = file_copy($file, $dest);
+  return $file;
+}
+
+/**
+ * Create taxonomy term of Api Tag.
+ */
+function _get_wso_api_store_create_tag_by_name($tags) {
+  foreach ($tags as $tag) {
+    $apiTagterm = _get_wso_api_store_tag_term_check($tag);
+    if (!$apiTagterm) {
+      // Create the APi tag term if not existed.
+      $vocab = taxonomy_vocabulary_machine_name_load('api_tags');
+      $term = (object) array(
+            'name' => $tag,
+            'description' => $tag,
+            'vid' => $vocab->vid,
+      );
+      taxonomy_term_save($term);
+    }
+  }
+}
+
+/**
+ * Check whether the API tag taxonomy term exists or not.
+ */
+function _get_wso_api_store_tag_term_check($tag) {
+  $query = db_select('taxonomy_term_data', "ttd");
+  $query->join('taxonomy_vocabulary', 'tv', 'tv.vid=ttd.vid');
+  $query->fields('ttd', array('tid'));
+  $query->condition('ttd.name', $tag);
+  $query->condition('tv.machine_name', 'api_tags');
+  $result = $query->execute()->fetchField();
+  return $result;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function sealedair_wso2_store_block_info() {
+  $blocks = array();
+  $blocks['api_subscription'] = array(
+    'info' => t('Subscription'),
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function sealedair_wso2_store_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'api_subscription' :
+      $block['content'] = '';
+      $block['content'] .= '<h2 class="block-title page-wrap custom-subscription"><span class="clr-orange">Subscription</h2>';
+      $subscription = drupal_get_form('wso_api_store_get_api_subscription_form');
+      $block['content'] .= drupal_render($subscription);
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * WSO2 API Store API Subscription form.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_get_api_subscription_form($form, &$form_state, $api_nodeId = NULL) {
+  $form = array();
+  // Application subscription form.
+  if (arg(0) == 'node' && is_numeric(arg(1))) {
+    $api_nodeId = arg(1);
+  }
+  $api_id = wso_api_store_get_api_id($api_nodeId);
+  $options_apps = wso_api_store_get_apps_list_not_subscribed($api_id);
+  array_unshift($options_apps, "-- Select API --");
+  $form['app_list'] = array(
+    '#prefix' => '<div class="subscription-form"><strong>Subscription : </strong>',
+    '#title' => t('Applications'),
+    '#type' => 'select',
+    '#options' => $options_apps
+  );
+  $form['apiId'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $api_id
+  );
+  $tiers = _get_sealedair_wso2_available_tiers();
+  $form['tiers'] = array(
+    '#title' => t('Tiers'),
+    '#type' => 'select',
+    '#options' => $tiers
+  );
+  if (empty($options_apps)) {
+    $disabled = TRUE;
+  }
+  else {
+    $disabled = FALSE;
+  }
+  $form['subscribe'] = array(
+    '#type' => 'submit',
+    '#value' => t('Subscribe'),
+    '#attributes' => array('class' => array('subscribe-button')),
+    '#disabled' => $disabled,
+    '#suffix' => '</div>'
+  );
+  return $form;
+}
+
+/**
+ * WSO2 API store App view display.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_get_api_subscription_form_validate($form, &$form_state) {
+  if (empty($form_state['values']['app_list']) || $form_state['values']['app_list'] == '0') {
+    form_set_error('app_list', t('Select any Application to Subscribe with an API.'));
+  }
+}
+
+/**
+ * WSO2 API store App view display.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_get_api_subscription_form_submit($form, &$form_state) {
+  $appId = $form_state['values']['app_list'];
+  $apiId = $form_state['values']['apiId'];
+  // Get api subscribed to app.
+  wso_api_store_app_api_get_subscribed($appId, $apiId);
+}
+
+/**
+ * WSO2 API Store App get subscribe to.
+ * 
+ * @param type $appId
+ * @param type $api_id
+ */
+function wso_api_store_app_api_get_subscribed($appId, $api_id) {
+  if (empty($appId) || empty($api_id)) {
+    drupal_set_message('Something went wrong, Please contact site administrator', 'error');
+    return;
+  }
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+  $data = array(
+    'tier' => 'Bronze',
+    'apiIdentifier' => $api_id,
+    'applicationId' => $appId
+  );
+  $encode_data = drupal_json_encode($data);
+  $options = array(
+    'method' => 'POST',
+    'data' => $encode_data,
+    'headers' => array('Authorization' => $authorization, 'Content-Type' => 'application/json')//'x-www-form-urlencoded')
+  );
+  $url = variable_get('wso2_base_uri') . '/subscriptions';
+  $result = drupal_http_request($url, $options);
+  if ($result->code == 201) {
+    drupal_set_message('Applications subscribed Successfully.');
+  }
+  else {
+    drupal_set_message('Error in Application subscription, Please contact site administrator.', 'error');
+  }
+}
+
+/**
+ * WSO2 API STORE get api Id.
+ * 
+ * @param type $api_nodeId
+ */
+function wso_api_store_get_api_id($api_nodeId) {
+  if (empty($api_nodeId)) {
+    drupal_set_message('Something went wrong, Please contact site administrator', 'error');
+    return;
+  }
+  $query = db_select('node', 'n');
+  $query->join('field_data_field_api_id', 'fi', 'n.nid=fi.entity_id');
+  $query->fields('fi', array('field_api_id_value'));
+  $query->condition('n.nid', $api_nodeId);
+  $result = $query->execute()->fetchField();
+  return $result;
+}
+
+/**
+ * WSO2 API Store get Application not subscribed with particular API.
+ */
+function wso_api_store_get_apps_list_not_subscribed($apiId) {
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+  $url = variable_get('wso2_base_uri') . "/subscriptions?apiId=" . $apiId;
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  $api_sub = array();
+  if ($result->code == 200) {
+    $data = drupal_json_decode($result->data);
+    foreach ($data['list'] as $value) {
+      $api_sub[$value['applicationId']] = $value['applicationId'];
+    }
+    $apps = wso_api_store_get_apps_list();
+    $options_apps = array();
+    if (!empty($apps)) {
+      foreach ($apps['list'] as $app) {
+        $app_id = base64_encode($app['applicationId']);
+        $options_apps[$app['applicationId']] = $app['name'];
+      }
+    }
+    $app_diff = array_diff_key($options_apps, $api_sub);
+    return $app_diff;
+  }
+  else {
+    drupal_set_message('Please contact site administrator.', 'error');
+  }
+  return;
+}
+
+/**
+ * WSO2 API Store get apps list.
+ * 
+ * @return type
+ */
+function wso_api_store_get_apps_list() {
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+
+  $url = variable_get('wso2_base_uri') . '/applications';
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  $data = '';
+  if ($result->code == 200) {
+    $data = drupal_json_decode($result->data);
+    return $data;
+  }
+  return;
+}
+
+/**
+ * Get the avaible tiers for APIs
+ */
+function _get_sealedair_wso2_available_tiers() {
+  $url = variable_get('wso2_base_uri') . '/tiers/api';
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json')
+  );
+  $result = drupal_http_request($url, $options);
+  $data = '';
+  if ($result->code == 200) {
+    $data = drupal_json_decode($result->data);
+    $tier_list = array();
+    foreach ($data['list'] as $tier) {
+      $tier_list[$tier['name']] = $tier['name'];
+    }
+    return $tier_list;
+  }
+  return;
+}
+
+/**
+ * Implements hook_views_api
+ */
+function sealedair_wso2_store_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'sealedair_wso2_store'),
+  );
+}

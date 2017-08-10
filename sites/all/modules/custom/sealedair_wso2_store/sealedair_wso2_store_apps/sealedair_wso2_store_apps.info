@@ -1,0 +1,5 @@
+name = Sealedair wso2 STORE APPS
+description = "Sealedair wso2 api store and its application details."
+package = "Sealedair WSO2"
+core = "7.x"
+

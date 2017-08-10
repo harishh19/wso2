@@ -1,0 +1,109 @@
+<?php
+/*
+ * @file User sync from sealed wso2 user to dev portal.
+ */
+
+
+/**
+ * Implements hook_form_alter().
+ */
+function sealedair_wso2_user_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'user_login' || $form_id == "user_login_block") {
+    $form['#submit'][] = "sealedair_Wso2_user_login_submit";
+  }
+  if ($form_id == 'user_register_form') {
+    $form['#validate'][] = 'sealedair_wso2_user_registeration_validate';
+    $form['#submit'][] = 'sealedair_wso2_user_registeration';
+  }
+}
+
+/**
+ * Implements sealedair_Wso2_user_login_submit().
+ */
+function sealedair_Wso2_user_login_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  _sealedair_wso2_generate_access_token_login($values);
+}
+
+/**
+ * Implements _sealedair_Wso2_generate_access_token_login().
+ * @param type $values
+ */
+function _sealedair_wso2_generate_access_token_login($values) {
+  $user = $values['name'];
+  $pass = $values['pass'];
+  $_SESSION['pass'] = $pass;
+  $_SESSION['user'] = $user;
+}
+
+/**
+ * WSO2 API store user registration validate.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function sealedair_wso2_user_registeration_validate($form, &$form_state) {
+  $username = $form_state['values']['name'];
+  $user = db_select('users', 'u')
+          ->fields('u', array('uid'))
+          ->condition('u.name', $username)
+          ->execute()->fetchField();
+  if (!empty($user)) {
+    form_set_error('name', t('Username already exists. Please provide the different Username.'));
+  }
+}
+
+/**
+ * User syn up with Sealed devportal and WSO2 API store user registration.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function sealedair_wso2_user_registeration($form, $form_state) {
+  $values = $form_state['values'];
+  if (empty($values['name'])) {
+    return;
+  }
+  // Register user at WSO2 End.
+  sealedair_wso2_api_store_user_register($values);
+  //regenerate the access-token for particular user.
+  _sealedair_wso2_generate_access_token_login($values);
+}
+
+/**
+ * Register user at WSO2 End.
+ * 
+ * @param type $values
+ */
+function sealedair_wso2_api_store_user_register($values) {
+ // $url = "https://54.172.206.43/store/site/blocks/user/sign-up/ajax/user-add.jag";
+  $url = variable_get('wso2_user_register');
+  $first_name = $values['field_first_name']['und'][0]['value'];
+  $last_name = $values['field_last_name']['und'][0]['value'];
+  $allfieldvalue = $first_name . '|' . $last_name . '|' . $values['mail'];
+  $data = array(
+    'action' => 'addUser',
+    'username' => $values['name'],
+    'password' => $values['pass'],
+    'allFieldsValues' => $allfieldvalue,
+  );
+  $options = array(
+    'method' => 'POST',
+    'data' => http_build_query($data),
+    'headers' => array('Content-Type' => 'application/x-www-form-urlencoded')
+  );
+  $result = drupal_http_request($url, $options);
+  if ($result->code == 200) {
+    $register = TRUE;
+    $data = drupal_json_decode($result->data);
+    if ($data['error'] == TRUE) {
+      drupal_set_message($data['message']);
+    }
+    else {
+      drupal_set_message(t('User created successfully @ WSO2.'));
+    }
+  }
+  else {
+    watchdog(WATCHDOG_ERROR, 'Unable to create user at WSO2, please check with site administrator.');
+  }
+}

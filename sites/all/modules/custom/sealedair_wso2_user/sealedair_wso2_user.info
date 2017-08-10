@@ -1,0 +1,4 @@
+name = Sealedair wso2 User
+description = "Sealedair wso2 api users sync."
+package = "Sealedair WSO2"
+core = "7.x"

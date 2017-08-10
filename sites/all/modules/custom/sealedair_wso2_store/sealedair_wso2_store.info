@@ -1,0 +1,6 @@
+name = Sealedair wso2 API STORE
+description = "Sealedair wso2 api store and its application."
+package = "Sealedair WSO2"
+core = "7.x"
+dependencies[] = views
+files[] = views/sealedair_wso2_store_handler_custom_field.inc

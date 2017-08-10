@@ -1,0 +1,1 @@
+{"swagger":"2.0","paths":{"/search":{"get":{"responses":{"200":{"description":""}},"x-auth-type":"Application & Application User","x-throttling-tier":"Unlimited","parameters":[{"name":"q","in":"query","required":true,"type":"string","description":"search parameter"}]}}},"info":{"title":"GoogleProxy","version":"1.0","description":"API to proxy google search url"}}

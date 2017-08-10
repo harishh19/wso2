@@ -1,0 +1,607 @@
+<?php
+
+/*
+ * @file
+ */
+
+function sealedair_wso2_store_apps_menu() {
+  $items = array();
+  $items['store/apps'] = array(
+    'title' => 'Sealedair wso2 Store Applications',
+    'description' => 'Provide the List of APPs',
+    'page callback' => 'sealedair_wso2_store_apps_list',
+    'access arguments' => array('access sealedair wso2 apps'),
+    'type' => MENU_NORMAL_ITEM, //Will appear in Navigation menu.
+  );
+  $items['store/apps/add'] = array(
+    'title' => 'Add Application',
+    'description' => 'Add Application to sealedair wso2',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wso_api_store_app_add_form'),
+    'access arguments' => array('wso2 api store apps'),
+  );
+  $items['applications/%/edit'] = array(
+    'description' => 'Edit App',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wso_api_store_app_add_form', 1),
+    'access arguments' => array('wso2 api store apps'),
+  );
+  $items['applications/%/%/delete'] = array(
+    'description' => 'Delete App',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wso_api_store_app_delete_form', 1, 2),
+    'access arguments' => array('wso2 api store apps'),
+  );
+  $items['applications/client-register'] = array(
+    'title' => 'Client Registration',
+    'description' => 'API STORE Client Name registration.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sealedair_wso2_store_client_registration_form'),
+    'access arguments' => array('access sealed wso2 api store apps'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function sealedair_wso2_store_apps_permission() {
+  return array(
+    'access sealedair wso2 apps' => array(
+      'title' => t('Access content for the Sealedair wso2 applications'),
+    ),
+    'access sealed wso2 api store apps' => array(
+      'title' => t('Access content for the Sealedair wso2 applications client registration'),
+    ),
+    'wso2 api store apps' => array(
+      'title' => t('Access content for the Sealedair wso2 store Add / edit applications'),
+    )
+  );
+}
+
+function sealedair_wso2_store_client_registration_form($form, &$form_state) {
+  $form = array();
+  $disabled = FALSE;
+  $form['callbackurl'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Callback Url'),
+    '#required' => TRUE,
+    '#default_value' => 'http://dev-sealedair-wso2.pantheonsite.io/',
+    '#disabled' => $disabled
+  );
+  $form['clientname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Client Name'),
+    '#required' => TRUE,
+    '#default_value' => 'dev_sealedair_wso2_api_store',
+    '#disabled' => $disabled
+  );
+  $options_tokenscope = array('Production' => 'Production', 'sandbox' => 'Sandbox');
+  $form['tokenscope'] = array(
+    '#type' => 'select',
+    '#title' => t('Token Scope'),
+    '#options' => $options_tokenscope,
+    '#required' => TRUE,
+    '#default_value' => 'production',
+    '#disabled' => $disabled
+  );
+  $form['owner'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Owner'),
+    '#required' => TRUE,
+    '#default_value' => 'admin',
+  );
+  $option_granttype = array('password' => 'password', 'refresh_token' => 'Refresh Token');
+  $form['grantype'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Grant Types'),
+    '#options' => $option_granttype,
+    '#required' => TRUE,
+    '#disabled' => $disabled
+  );
+  $option_saasApp = array('true' => 'TRUE');
+  $form['saasApp'] = array(
+    '#type' => 'select',
+    '#title' => t('Saas APP'),
+    '#options' => $option_saasApp,
+    '#required' => TRUE,
+    '#default_value' => 'true',
+    '#disabled' => $disabled
+  );
+  $form['generate_token'] = array(
+    '#type' => 'submit',
+    '#value' => t('Generate Token'),
+    '#prefix' => '<div class="form-action">',
+    '#suffix' => '</div>',
+    '#disabled' => $disabled
+  );
+  return $form;
+}
+
+/**
+ * Generate the API store app access token form validate.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function sealedair_wso2_store_client_registration_form_validate($form, &$form_state) {
+  $clientId = variable_get('clientId');
+  $clientSecret = variable_get('clientSecret');
+  if (!empty($clientId) && !empty($clientSecret)) {
+    form_set_error('', t('As already access token got created. If you want to create an another, Please contact site administrator.'));
+  }
+}
+
+/**
+ * Generate the API store app access token form submit.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function sealedair_wso2_store_client_registration_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+
+  // Generate the Client Id and Client secret.
+  $callbackUrl = $values['callbackurl'];
+  $clientName = $values['clientname'];
+  $tokenScope = $values['tokenscope'];
+  $owner = $values['owner'];
+  $grantType = implode(' ', $values['grantype']);
+  $saasApp = true;
+  $data = array(
+    'callbackUrl' => $callbackUrl,
+    'clientName' => $clientName,
+    'tokenScope' => $tokenScope,
+    'owner' => $owner,
+    'grantType' => $grantType,
+    'saasApp' => $saasApp,
+  );
+  $user = "admin";
+  $pass = "admin";
+  $auth_encode = base64_encode($user . ':' . $pass);
+  $authorization = 'Basic ' . $auth_encode;
+  $encode_data = drupal_json_encode($data);
+  $options = array(
+    'method' => 'POST',
+    'data' => $encode_data,
+    'headers' => array('Authorization' => $authorization, 'Content-Type' => 'x-www-form-urlencoded')
+  );
+  $url = variable_get('wso2_client_registration');
+  $result = drupal_http_request($url, $options);
+  if ($result->code == 201) {
+    $values = drupal_json_decode($result->data);
+    variable_set('clientId', $values['clientId']);
+    variable_set('clientSecret', $values['clientSecret']);
+    drupal_set_message('ClientName Registered Successfully.');
+  }
+}
+
+/*
+ * Implements sealedair_wso2_store_apps_list().
+ */
+
+function sealedair_wso2_store_apps_list() {
+  global $base_url;
+  _get_sealedair_wso2_api_store_access_token('apim:subscribe');
+  $app_list = sealedair_wso2_store_get_apps_list();
+  if (!empty($app_list)) {
+    foreach ($app_list['list'] as $app) {
+      sealedair_wso2_store_apps_entity_sync($app);
+    }
+  }
+
+  $data = '<div class="add-app-node"><a href="' . $base_url . '/applications/add" class="wso-button">Add App</a></div>';
+  return $data;
+}
+
+/**
+ * 
+ */
+function _get_sealedair_wso2_check_apps_entity_exist($appId) {
+  $query = db_select('node', 'n');
+  $query->join('field_data_field_application_id', 'fai', 'fai.entity_id=n.nid');
+  $query->fields('n', array('nid'));
+  $query->condition('n.type', 'apps');
+  $query->condition('fai.field_application_id_value', $appId);
+  $result = $query->execute()->fetchField();
+  return $result;
+}
+
+/**
+ * 
+ */
+function sealedair_wso2_store_apps_entity_sync($app, $appImgFid = NULL) {
+  if (empty($app['applicationId'])) {
+    return;
+  }
+  global $user;
+  $appentityId = _get_sealedair_wso2_check_apps_entity_exist($app['applicationId']);
+  $app_subscription = wso_api_store_subscription_list($app['applicationId']);
+  if (empty($appentityId)) {
+    // Create node object.
+    $node = new StdClass();
+    $node->uid = $user->uid;
+    $node->type = 'apps';
+    $node->language = LANGUAGE_NONE;
+    node_object_prepare($node);
+  }
+  else {
+    $node = node_load($appentityId);
+  }
+  $node->title = $app['name'];
+  $node->body[$node->language][0]['value'] = $app['description'];
+  $node->field_application_id[$node->language][0]['value'] = $app['applicationId'];
+  $term = taxonomy_get_term_by_name($app['throttlingTier'], 'tiers');
+  if ($term) {
+    $termId = "";
+    foreach ($term as $term_details) {
+      $termId = $term_details->tid;
+    }
+  }
+  $node->field_throttling_tier[$node->language][0]['tid'] = $termId;
+  $node->field_status[$node->language][0]['value'] = $app['status'];
+  if ($app_subscription) {
+    foreach ($app_subscription as $key => $subs) {
+      $apiName = explode("-", $subs);
+      $apiEntityId = _get_api_entity_id($apiName);
+      $node->field_subscribe_api[$node->language][$key]['nid'] = $apiEntityId;
+    }
+  }
+  if ($appImgFid) {
+    $file = file_load($appImgFid);
+    if ($file->filename) {
+      $node->field_thumbnail[$node->language][0] = array(
+        'fid' => $file->fid,
+        'filename' => $file->filename,
+        'filemime' => $file->filemime,
+        'uid' => $user->uid,
+        'uri' => $file->uri,
+        'status' => 1
+      );
+    }
+  }
+  node_save($node);
+  return;
+}
+
+function _get_api_entity_id($apiName) {
+  if (!$apiName) {
+    return;
+  }
+  $query = db_select('node', 'n');
+  $query->fields('n', array('nid'));
+  $query->condition('n.type', 'apis_doc');
+  $query->condition('n.title', $apiName);
+  $apiEntityId = $query->execute()->fetchField();
+  return $apiEntityId;
+}
+
+/**
+ * 
+ */
+function _get_sealedair_wso2_api_store_access_token($scope) {
+
+  $client_id = variable_get('clientId');
+  $client_secret = variable_get('clientSecret');
+  if (empty($client_id) || empty($client_secret)) {
+    watchdog('WsO2 API STORE', t('ClientID and ClientSecret does not exists'), [], WATCHDOG_ERROR);
+    return;
+  }
+  // Generate the Access Token
+  //$url = "https://54.172.206.43/oauth2/token";
+  $url = variable_get('wso2_token_access');
+  //https://34.203.132.162/client-registration/v0.11/register
+  $grant_type = "password";
+  // $scope = 'apim:subscribe';
+  $user = $_SESSION['user'];
+  $pass = $_SESSION['pass'];
+  $data = array(
+    'grant_type' => $grant_type,
+    'username' => $user,
+    'password' => $pass,
+    'scope' => $scope,
+    'client_id' => $client_id,
+    'client_secret' => $client_secret,
+  );
+  $options = array(
+    'method' => 'POST',
+    'data' => http_build_query($data),
+    'headers' => array('Content-Type' => 'application/x-www-form-urlencoded')
+  );
+  $result = drupal_http_request($url, $options);
+
+  if ($result->code == 200) {
+    $values = drupal_json_decode($result->data);
+    variable_set('app_token_type', $values['token_type']);
+    variable_set('app_access_token', $values['access_token']);
+    watchdog('WsO2 API STORE', t('Access Token generated Successfully.'));
+  }
+  else {
+    watchdog('WsO2 API STORE', t('Error in generating Access-Token, Please contact site administrator.'), [], WATCHDOG_ERROR);
+  }
+}
+
+/**
+ * WSO2 API Store get apps list.
+ * 
+ * @return type
+ */
+function sealedair_wso2_store_get_apps_list() {
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+
+  $authorization = $app_token_type . ' ' . $access_token;
+  // $url = 'https://52.220.91.63:9443/api/am/store/v0.10/applications';
+  $url = variable_get('wso2_base_uri') . '/applications';
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  $data = '';
+  if ($result->code == 200) {
+    $data = drupal_json_decode($result->data);
+    return $data;
+  }
+  return;
+}
+
+/*
+ * Get the subscription list for Application
+ */
+
+function wso_api_store_subscription_list($appId) {
+  if (empty($appId)) {
+    drupal_set_message('Something went wrong, Please contact site administrator', 'error');
+    return;
+  }
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+  $url = variable_get('wso2_base_uri') . "/subscriptions?applicationId=" . $appId;
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  $app_sub = array();
+  if ($result->code == 200) {
+    $data = drupal_json_decode($result->data);
+    foreach ($data['list'] as $sub) {
+      $app_sub[] = $sub['apiIdentifier'];
+    }
+  }
+  return $app_sub;
+}
+
+/**
+ * WSO2 API store app list form.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_app_add_form($form, &$form_state, $appId = NULL) {
+  $form = array();
+  $button = t('Add');
+  if (!empty($appId)) {
+    $appImgFid = _get_wso_api_store_app_entity_img_fid($appId);
+    // Get the App details for Edit.
+    $result = wso_api_store_get_app_details($appId);
+    if ($result->code == 200) {
+      $button = t('Update');
+      $app = drupal_json_decode($result->data);
+      $appname = $app['name'];
+      $pertokenquota = $app['throttlingTier'];
+      $appdescription = $app['description'];
+    }
+  }
+  $form['appId'] = array(
+    '#type' => 'hidden',
+    '#default_value' => !empty($appId) ? $appId : '',
+  );
+  $form['appname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Name'),
+    '#required' => TRUE,
+    '#default_value' => !empty($appname) ? $appname : '',
+  );
+  $pertokenquota_option = array('Unlimited' => 'Unlimited');
+  $form['pertokenquota'] = array(
+    '#type' => 'select',
+    '#title' => t('Per Token Quota'),
+    '#options' => $pertokenquota_option,
+    '#description' => t('This feature allows you to assign an API request'
+        . ' quota per access token. Allocated quota will be shared among all'
+        . ' the subscribed APIs of the application.'),
+    '#default_value' => !empty($pertokenquota) ? $pertokenquota : '',
+  );
+  $form['appImage'] = array(
+    '#title' => t('Thumbnail'),
+    '#type' => 'managed_file',
+    '#description' => t('The uploaded image will be displayed on this application page.'),
+    '#default_value' => !empty($appImgFid) ? variable_get('', $appImgFid) : "",
+    '#upload_location' => 'public://appImage/',
+    '#upload_validators' => array('file_validate_extensions' => array('png jpg jpeg gif'))
+  );
+  $form['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => !empty($appdescription) ? $appdescription : '',
+  );
+
+  $form['addapp'] = array(
+    '#type' => 'submit',
+    '#value' => $button,
+    '#prefix' => '<div class="form-action">'
+  );
+  $form['cancel'] = array(
+    '#markup' => l(t('Cancel'), 'store/apps', array('attributes' => array('class' => array('wso-app-submit form-submit')))),
+    '#suffix' => '</div>'
+  );
+  return $form;
+}
+
+/**
+ * WSO2 API store app list form submit.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_app_add_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  // Add Application to WSO2 API STORE.
+  $appId = !empty($values['appId']) ? $values['appId'] : '';
+  $add_app = _wso_api_store_app_add($values, $appId);
+  if ($add_app) {
+    $form_state['redirect'] = 'store/apps';
+  }
+}
+
+/**
+ * WSO2 PI store add Application.
+ */
+function _wso_api_store_app_add($values, $appId = NULl) {
+  if (!empty($appId)) {
+    $method = 'PUT';
+    $url = variable_get('wso2_base_uri') . '/applications/' . $appId;
+  }
+  else {
+    $method = 'POST';
+    $url = variable_get('wso2_base_uri') . '/applications';
+  }
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+
+  $callbackurl = 'http://dev-wso2.pantheonsite.io/';
+  $appname = $values['appname'];
+  $data = array(
+    'throttlingTier' => $values['pertokenquota'],
+    'description' => $values['description'],
+    'name' => $appname,
+    'callbackUrl' => $callbackurl
+  );
+  $encode_data = drupal_json_encode($data);
+  $authorization = $app_token_type . ' ' . $access_token;
+  $options = array(
+    'method' => $method,
+    'data' => $encode_data,
+    'headers' => array('Authorization' => $authorization, 'Content-Type' => 'application/json')
+  );
+  $result = drupal_http_request($url, $options);
+  $created = FALSE;
+  if ($result->code == 201) {
+    // Created App entity at developer portal.
+    $data = drupal_json_decode($result->data);
+    sealedair_wso2_store_apps_entity_sync($data, $values['appImage']);
+    $created = TRUE;
+    drupal_set_message(t('@app created successfully.', array('@app' => $appname)));
+  }
+  elseif ($result->code == 200) {
+    // Updated App entity at developer portal.
+    $data = drupal_json_decode($result->data);
+    sealedair_wso2_store_apps_entity_sync($data, $values['appImage']);
+    $created = TRUE;
+    drupal_set_message(t('@app updated successfully.', array('@app' => $appname)));
+  }
+  else {
+    drupal_set_message(t('Error in adding Application, Please contact site administrator.'), 'error');
+  }
+  return $created;
+}
+
+/**
+ * Wso API store get APP details.
+ * 
+ * @param type $appId
+ */
+function wso_api_store_get_app_details($appId) {
+  if (empty($appId)) {
+    drupal_set_message('Something went wrong, Please contact site administrator', 'error');
+    return;
+  }
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+  // Deletes the app based on appId
+  $url = variable_get('wso2_base_uri') . "/applications/" . $appId;
+  $options = array(
+    'method' => 'GET',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  return $result;
+}
+
+/*
+ * Get Application entity thumbnail.
+ */
+
+function _get_wso_api_store_app_entity_img_fid($appId) {
+  if (empty($appId)) {
+    return;
+  }
+  $query = db_select('node', 'n');
+  $query->join('field_data_field_application_id', 'fpi', 'fpi.entity_id=n.nid');
+  $query->leftjoin('field_data_field_thumbnail', 'ft', 'ft.entity_id=n.nid');
+  $query->fields('ft', array('field_thumbnail_fid'));
+  $query->condition('fpi.field_application_id_value', $appId);
+  $query->condition('n.type', 'apps');
+  $result = $query->execute()->fetchField();
+  return $result;
+}
+
+/**
+ * WSO2 API store APp deletion form.
+ * 
+ * @param type $form
+ * @param type $form_state
+ */
+function wso_api_store_app_delete_form($form, &$form_state, $appId, $appname) {
+  $form['appId'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $appId
+  );
+  $form['appname'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $appname
+  );
+  $form['operation'] = array('#type' => 'hidden', '#value' => 'Delete');
+  $confirm_question = t('Are you sure you want to delete "@label"? ', array('@label' => $appname));
+  $form['markup']['#markup'] = $confirm_question;
+  return confirm_form($form, $confirm_question, 'store/apps', t('This action cannot be undone.'), t('Delete'), t('Cancel'));
+}
+
+function wso_api_store_app_delete_form_submit($form, &$form_state) {
+  $appId = $form_state['values']['appId'];
+  $appname = $form_state['values']['appname'];
+  _get_sealedair_wso2_api_store_access_token("apim:subscribe");
+  $access_token = variable_get('app_access_token');
+  $app_token_type = variable_get('app_token_type');
+  $authorization = $app_token_type . ' ' . $access_token;
+  // Deletes the app based on appId
+  $url = variable_get('wso2_base_uri') . "/applications/" . $appId;
+  $options = array(
+    'method' => 'DELETE',
+    'headers' => array('Content-Type' => 'application/json', 'Authorization' => $authorization),
+  );
+  $result = drupal_http_request($url, $options);
+  if ($result->code == 200) {
+    //Get the App entity id by Application Id.
+    $appentityId = _get_sealedair_wso2_check_apps_entity_exist($appId);
+    if (!empty($appentityId)) {
+      // Delete the App entity from developer portal DB.
+      node_delete($appentityId);
+    }
+    $type = 'status';
+    $message = t('"@app" deleted successfully.', array('@app' => $appname));
+  }
+  else {
+    $type = 'error';
+    $message = t('Error in deleting "@app", Please contact your site administrator.', array('@app' => $appname));
+  }
+  drupal_set_message($message, $type);
+  $form_state['redirect'] = 'store/apps';
+}

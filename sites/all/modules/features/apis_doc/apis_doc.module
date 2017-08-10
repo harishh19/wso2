@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the APIs Doc feature.
+ */
+
+include_once 'apis_doc.features.inc';
